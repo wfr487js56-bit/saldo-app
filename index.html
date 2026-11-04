@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101114">
+<title>Saldo</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101114;color:white;font-family:-apple-system,Arial,sans-serif}
+main{max-width:520px;margin:auto;padding:22px 18px 80px}
+h1{font-size:32px;letter-spacing:-1px}
+h2{font-size:18px;margin-top:27px}
+.card{background:#1d1f24;border:1px solid #303238;border-radius:20px;padding:19px;margin:12px 0}
+small{color:#a3a5ac}
+.big{font-size:36px;font-weight:bold;margin-top:12px}
+.green{color:#75e2a6}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid .card{margin:0}
+strong{display:block;margin-top:9px;font-size:22px}
+input,select,button{font-size:16px;width:100%;padding:13px;border-radius:12px;margin:7px 0 12px}
+input,select{background:#2c2e34;border:1px solid #4a4c53;color:white}
+button{background:white;color:#111;border:0;font-weight:700}
+label{font-size:13px;color:#aaa}
+.line{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #383a40}
+.line:last-child{border:0}
+.bar{height:7px;background:#383a40;border-radius:8px;margin-top:8px;overflow:hidden}
+.fill{height:100%;background:#75e2a6}
+.muted{color:#a3a5ac;font-size:13px}
+</style>
+</head>
+<body>
+<main>
+<h1>saldo<span class="green">.</span></h1>
+<div id="month" class="muted"></div>
+<section class="card">
+<small>Disponível após despesas e poupança</small>
+<div class="big" id="available">0,00 €</div>
+<small>O teu dinheiro, sob controlo.</small>
+</section>
+<div class="grid">
+<div class="card"><small>Rendimento</small><strong id="income">0 €</strong></div>
+<div class="card"><small>Despesas</small><strong id="spent">0 €</strong></div>
+<div class="card"><small>Poupança</small><strong class="green" id="saving">0 €</strong></div>
+<div class="card"><small>Movimentos</small><strong id="count">0</strong></div>
+</div>
+<h2>Orçamento mensal</h2>
+<div class="card">
+<label>Rendimento (€)</label>
+<input id="salary" type="number" min="0" step="0.01">
+<label>Objetivo de poupança (€)</label>
+<input id="goal" type="number" min="0" step="0.01">
+<button onclick="saveBudget()">Guardar orçamento</button>
+</div>
+<h2>Adicionar despesa</h2>
+<form class="card" id="form">
+<label>Descrição</label>
+<input name="description" placeholder="Ex.: Café" maxlength="100" required>
+<label>Valor (€)</label>
+<input name="amount" type="number" min="0.01" step="0.01" required>
+<label>Categoria</label>
+<select name="category">
+<option>Alimentação</option><option>Carro</option>
+<option>Lazer</option><option>Hobbies</option>
+<option>Compras</option><option>Casa</option>
+<option>Saúde</option><option>Outros</option>
+</select>
+<label>Data</label>
+<input name="date" type="date" id="date" required>
+<button type="submit">Guardar despesa</button>
+</form>
+<h2>Despesas por categoria</h2>
+<div class="card" id="categories"></div>
+<h2>Movimentos deste mês</h2>
+<div class="card" id="movements"></div>
+<h2>Cópia de segurança</h2>
+<div class="card">
+<p class="muted">Os dados ficam guardados neste navegador. Guarda cópias regularmente.</p>
+<button onclick="backup()">Exportar dados</button>
+<label>Restaurar cópia JSON</label>
+<input type="file" id="restore" accept=".json">
+</div>
+</main>
+<script>
+const K="saldo_v1";
+const cats=["Alimentação","Carro","Lazer","Hobbies","Compras","Casa","Saúde","Outros"];
+const $=id=>document.getElementById(id);
+const eur=n=>Number(n||0).toLocaleString("pt-PT",{style:"currency",currency:"EUR"});
+const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-")};
+let db={salary:0,goal:200,tx:[]};
+try{const x=JSON.parse(localStorage.getItem(K));if(x&&Array.isArray(x.tx))db=x}catch(e){}
+function save(){localStorage.setItem(K,JSON.stringify(db));render()}
+function saveBudget(){db.salary=Math.max(0,Number($("salary").value)||0);db.goal=Math.max(0,Number($("goal").value)||0);save()}
+function render(){
+const ym=today().slice(0,7);
+const tx=db.tx.filter(x=>x.date.slice(0,7)===ym);
+const spent=tx.reduce((a,x)=>a+x.amount,0);
+$("month").textContent=new Date().toLocaleDateString("pt-PT",{month:"long",year:"numeric"});
+$("salary").value=db.salary;
+$("goal").value=db.goal;
+$("income").textContent=eur(db.salary);
+$("spent").textContent=eur(spent);
+$("saving").textContent=eur(db.goal);
+$("available").textContent=eur(db.salary-db.goal-spent);
+$("count").textContent=tx.length;
+$("categories").replaceChildren();
+for(const c of cats){
+const sum=tx.filter(x=>x.category===c).reduce((a,x)=>a+x.amount,0);
+const row=document.createElement("div");
+row.className="line";
+const label=document.createElement("span");label.textContent=c;
+const value=document.createElement("b");value.textContent=eur(sum);
+row.append(label,value);
+const bar=document.createElement("div");bar.className="bar";
+const fill=document.createElement("div");fill.className="fill";
+fill.style.width=(spent?sum/spent*100:0)+"%";
+bar.append(fill);$("categories").append(row,bar);
+}
+$("movements").replaceChildren();
+if(!tx.length){$("movements").textContent="Ainda não tens movimentos neste mês.";return}
+for(const t of [...tx].sort((a,b)=>b.date.localeCompare(a.date))){
+const row=document.createElement("div");row.className="line";
+const info=document.createElement("div");
+const name=document.createElement("b");name.textContent=t.description;
+const meta=document.createElement("div");meta.className="muted";meta.textContent=t.category+" · "+t.date;
+info.append(name,meta);
+const side=document.createElement("div");
+const value=document.createElement("b");value.textContent="-"+eur(t.amount);
+const del=document.createElement("button");del.textContent="Eliminar";del.style.fontSize="12px";
+del.onclick=()=>{if(confirm("Eliminar despesa?")){db.tx=db.tx.filter(x=>x.id!==t.id);save()}};
+side.append(value,del);row.append(info,side);$("movements").append(row);
+}
+}
+$("date").value=today();
+$("form").onsubmit=e=>{
+e.preventDefault();
+const f=new FormData(e.target);
+const amount=Number(f.get("amount"));
+if(!Number.isFinite(amount)||amount<=0)return;
+db.tx.push({id:crypto.randomUUID(),description:String(f.get("description")),amount,category:String(f.get("category")),date:String(f.get("date"))});
+save();e.target.reset();$("date").value=today();
+};
+function backup(){
+const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+const url=URL.createObjectURL(blob);const a=document.createElement("a");
+a.href=url;a.download="saldo-backup.json";a.click();
+setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$("restore").onchange=async e=>{
+try{
+const data=JSON.parse(await e.target.files[0].text());
+if(!Array.isArray(data.tx)||!Number.isFinite(Number(data.salary))||!Number.isFinite(Number(data.goal)))throw Error();
+if(!data.tx.every(t=>typeof t.description==="string"&&cats.includes(t.category)&&/^\d{4}-\d{2}-\d{2}$/.test(t.date)&&Number.isFinite(t.amount)&&t.amount>0))throw Error();
+if(confirm("Substituir os dados atuais pela cópia?")){db=data;save()}
+}catch(err){alert("Cópia inválida")}
+};
+render();
+</script>
+</body>
+</html>
